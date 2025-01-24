@@ -1,6 +1,6 @@
 # Coroutines
 
-Custom coroutines implementation in [flat assembler](https://flatassembler.net/).
+Custom coroutines implementation in GNU C.
 
 ## Quick Start
 
