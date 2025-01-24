@@ -14,6 +14,9 @@ fn void counter(void* arg)
 fn void main() {
     coroutine::init();
     defer coroutine::finish();
+    coroutine::go(fn void(void *arg) {
+        io::printfn("Hello from Lambda");
+    });
     coroutine::go(&counter, (void*)20);
     coroutine::go(&counter, (void*)5);
     while (coroutine::alive() > 1) coroutine::yield();
