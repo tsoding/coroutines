@@ -33,11 +33,6 @@ typedef struct {
 
 Contexts contexts = {0};
 
-// [call][...]
-//       ^
-//       RIP
-// stack: [RIP]
-
 void __attribute__((naked)) coroutine_yield(void)
 {
     asm(
@@ -51,6 +46,7 @@ void __attribute__((naked)) coroutine_yield(void)
     "    movq %rsp, %rdi\n"
     "    jmp coroutine_switch_context\n");
 }
+
 void __attribute__((naked)) coroutine_restore_context(void *rsp)
 {
     (void)rsp;
@@ -65,6 +61,7 @@ void __attribute__((naked)) coroutine_restore_context(void *rsp)
     "    popq %rdi\n"
     "    ret\n");
 }
+
 void coroutine_switch_context(void *rsp)
 {
     contexts.items[contexts.current].rsp = rsp;
@@ -89,11 +86,6 @@ void coroutine_finish(void)
         return;
     }
 
-    /// 0        1        2        3
-    /// [context][context][context][context]
-    ///                   ^
-    /// 4 - 1 - 1
-
     Context t = contexts.items[contexts.current];
     contexts.items[contexts.current] = contexts.items[contexts.count-1];
     contexts.items[contexts.count-1] = t;
@@ -104,19 +96,17 @@ void coroutine_finish(void)
 
 void coroutine_go(void (*f)(void*), void *arg)
 {
-    // [            ][regs][ret][finish]
-    //                          ^
     void *stack_base = malloc(STACK_CAPACITY); // TODO: align the stack to 16 bytes or whatever
     void **rsp = (void**)((char*)stack_base + STACK_CAPACITY);
     *(--rsp) = coroutine_finish;
     *(--rsp) = f;
     *(--rsp) = arg; // push rdi
-    *(--rsp) = 0; // push rbx
-    *(--rsp) = 0; // push rbp
-    *(--rsp) = 0; // push r12
-    *(--rsp) = 0; // push r13
-    *(--rsp) = 0; // push r14
-    *(--rsp) = 0; // push r15
+    *(--rsp) = 0;   // push rbx
+    *(--rsp) = 0;   // push rbp
+    *(--rsp) = 0;   // push r12
+    *(--rsp) = 0;   // push r13
+    *(--rsp) = 0;   // push r14
+    *(--rsp) = 0;   // push r15
     da_append(&contexts, ((Context){
         .rsp = rsp,
         .stack_base = stack_base,
