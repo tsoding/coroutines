@@ -1,8 +1,8 @@
-main: main.o coroutine.o
-	ld -o main main.o coroutine.o /usr/lib/crt1.o -lc -dynamic-linker /lib64/ld-linux-x86-64.so.2
+main_c3: main.c3 coroutine.o
+	c3c compile main.c3 coroutine.o
 
-main.o: main.c
-	gcc -c main.c
+main: main.c coroutine.o
+	gcc -Wall -Wextra -ggdb -o main main.c coroutine.o
 
-coroutine.o: coroutine.asm
-	fasm coroutine.asm
+coroutine.o: coroutine.c
+	gcc -Wall -Wextra -ggdb -c coroutine.c

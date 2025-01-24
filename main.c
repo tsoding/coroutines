@@ -1,14 +1,15 @@
+#include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
 #include <stdbool.h>
+#include "coroutine.h"
 
-void coroutine_init(void);
-void coroutine_go(void (*f)(void));
-void coroutine_yield(void);
-
-void counter(void)
+void counter(void *arg)
 {
-    for (int i = 0; i < 10; ++i) {
-        printf("%d\n", i);
+    long int n = (long int)arg;
+    for (int i = 0; i < n; ++i) {
+        printf("[%zu] %d\n", coroutine_id(), i);
         coroutine_yield();
     }
 }
@@ -16,8 +17,9 @@ void counter(void)
 int main()
 {
     coroutine_init();
-    coroutine_go(counter);
-    coroutine_go(counter);
-    while (true) coroutine_yield();
+        coroutine_go(&counter, (void*)5);
+        coroutine_go(&counter, (void*)10);
+        while (coroutine_alive() > 1) coroutine_yield();
+    coroutine_finish();
     return 0;
 }
