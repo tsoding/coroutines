@@ -1,12 +1,12 @@
 #include <assert.h>
 #include <stdlib.h>
+#include <stdint.h>
+#include <sys/types.h>
 
-// Initial capacity of a dynamic array
 #ifndef DA_INIT_CAP
 #define DA_INIT_CAP 256
 #endif
 
-// Append an item to a dynamic array
 #define da_append(da, item)                                                          \
     do {                                                                             \
         if ((da)->count >= (da)->capacity) {                                         \
@@ -14,14 +14,13 @@
             (da)->items = realloc((da)->items, (da)->capacity*sizeof(*(da)->items)); \
             assert((da)->items != NULL && "Buy more RAM lol");                       \
         }                                                                            \
-                                                                                     \
         (da)->items[(da)->count++] = (item);                                         \
     } while (0)
 
-
 typedef struct {
-    void *rsp;
-    void *stack_base;
+    void *rsp;              
+    void *stack_base;       
+    void *allocated_base;   
 } Context;
 
 typedef struct {
@@ -32,6 +31,14 @@ typedef struct {
 } Contexts;
 
 Contexts contexts = {0};
+
+typedef struct {
+    Context **items;
+    size_t count;
+    size_t capacity;
+} FreedStacks;
+
+FreedStacks freed_stacks = {0};
 
 void __attribute__((naked)) coroutine_yield(void)
 {
@@ -65,7 +72,7 @@ void __attribute__((naked)) coroutine_restore_context(void *rsp)
 void coroutine_switch_context(void *rsp)
 {
     contexts.items[contexts.current].rsp = rsp;
-    contexts.current = (contexts.current + 1)%contexts.count;
+    contexts.current = (contexts.current + 1) % contexts.count;
     coroutine_restore_context(contexts.items[contexts.current].rsp);
 }
 
@@ -78,17 +85,22 @@ void coroutine_init(void)
 
 void coroutine_finish(void)
 {
-    // TODO: free the stack of finished coroutine
-    // TODO: by removing elements from the contexts array we invalidate ids
+    da_append(&freed_stacks, contexts.items[contexts.current].allocated_base);
 
     if (contexts.current == 0) {
         contexts.count = 0;
+
+        for (size_t i = 0; i < freed_stacks.count; i++) {
+            free(freed_stacks.items[i]);
+        }
+
+        freed_stacks.count = 0;
         return;
     }
 
     Context t = contexts.items[contexts.current];
-    contexts.items[contexts.current] = contexts.items[contexts.count-1];
-    contexts.items[contexts.count-1] = t;
+    contexts.items[contexts.current] = contexts.items[contexts.count - 1];
+    contexts.items[contexts.count - 1] = t;
     contexts.count -= 1;
     contexts.current %= contexts.count;
     coroutine_restore_context(contexts.items[contexts.current].rsp);
@@ -96,8 +108,13 @@ void coroutine_finish(void)
 
 void coroutine_go(void (*f)(void*), void *arg)
 {
-    void *stack_base = malloc(STACK_CAPACITY); // TODO: align the stack to 16 bytes or whatever
+    void *raw = malloc(STACK_CAPACITY + 16);
+    uintptr_t addr = (uintptr_t)raw;
+    addr = (addr + 15) & ~(uintptr_t)15;
+    void *stack_base = (void*)addr;
+
     void **rsp = (void**)((char*)stack_base + STACK_CAPACITY);
+
     *(--rsp) = coroutine_finish;
     *(--rsp) = f;
     *(--rsp) = arg; // push rdi
@@ -107,9 +124,11 @@ void coroutine_go(void (*f)(void*), void *arg)
     *(--rsp) = 0;   // push r13
     *(--rsp) = 0;   // push r14
     *(--rsp) = 0;   // push r15
+
     da_append(&contexts, ((Context){
         .rsp = rsp,
         .stack_base = stack_base,
+        .allocated_base = raw
     }));
 }
 
