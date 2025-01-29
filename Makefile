@@ -1,3 +1,6 @@
+.PHONY: all
+all: main main_c3
+
 main: main.c coroutine.o
 	gcc -Wall -Wextra -ggdb -o main main.c coroutine.o
 
