@@ -5,7 +5,7 @@ import std::net;
 import coroutine;
 
 fn void client(void *arg) {
-    io::printfn("Client connected!");
+    io::printfn("[%d] Client connected!", coroutine::id());
 
     TcpSocket* client_sock = (TcpSocket*)arg;
     char[] buf = mem::new_array(char, 1024);
@@ -32,6 +32,8 @@ fn void client(void *arg) {
             break READ;
         }
 
+        io::printfn("[%d] Client sent %d bytes", coroutine::id(), chunk.len);
+
         while WRITE: (chunk.len > 0) {
             usz! n = client_sock.write(chunk);
             if (catch nani = n) {
@@ -45,7 +47,7 @@ fn void client(void *arg) {
             chunk = chunk[n..];
         }
     }
-    io::printfn("Client disconnected");
+    io::printfn("[%d] Client disconnected", coroutine::id());
 }
 
 fn void main() {
