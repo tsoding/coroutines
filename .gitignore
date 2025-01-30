@@ -1,6 +1,1 @@
-main
-main_c3
-counter
-counter_c3
-echo
-*.o
+build/
