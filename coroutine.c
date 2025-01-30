@@ -81,6 +81,7 @@ typedef struct {
     size_t capacity;
 } Polls;
 
+// TODO: coroutines library probably does not work well in multithreaded environment
 static size_t current     = 0;
 static Indices active     = {0};
 static Indices dead       = {0};
