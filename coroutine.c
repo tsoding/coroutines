@@ -11,7 +11,7 @@
     do {                                                                             \
         if ((da)->count >= (da)->capacity) {                                         \
             (da)->capacity = (da)->capacity == 0 ? DA_INIT_CAP : (da)->capacity*2;   \
-            (da)->items = realloc((da)->items, (da)->capacity*sizeof(*(da)->items)); \
+            (da)->items = reallocarray((da)->items, (da)->capacity, sizeof(item));   \
             assert((da)->items != NULL && "Buy more RAM lol");                       \
         }                                                                            \
                                                                                      \
@@ -21,7 +21,7 @@
 
 typedef struct {
     void *rsp;
-    void *stack_base;
+    const void *stack_base;
 } Context;
 
 typedef struct {
@@ -35,38 +35,50 @@ Contexts contexts = {0};
 
 void __attribute__((naked)) coroutine_yield(void)
 {
-    asm(
-    "    pushq %rdi\n"
-    "    pushq %rbp\n"
-    "    pushq %rbx\n"
-    "    pushq %r12\n"
-    "    pushq %r13\n"
-    "    pushq %r14\n"
-    "    pushq %r15\n"
-    "    movq %rsp, %rdi\n"
-    "    jmp coroutine_switch_context\n");
+    asm (
+    "    cmpq $2, %0\n"
+    "    jbe just_ret\n"
+    "    pushq %%rdi\n"  // save the registers
+    "    pushq %%rbp\n"
+    "    pushq %%rbx\n"
+    "    pushq %%r12\n"
+    "    pushq %%r13\n"
+    "    pushq %%r14\n"
+    "    pushq %%r15\n"
+    "    movq %%rsp, %%rdi\n"  // make %rdi point to our stack
+    // so coroutine_switch_context takes that %rsp as param
+    "    jmp coroutine_switch_context\n"
+    "just_ret:\n"
+    "    ret\n"
+    :  // output
+    : "m" (contexts.count)  // input
+    );
 }
 
 void __attribute__((naked)) coroutine_restore_context(void *rsp)
 {
-    (void)rsp;
+    (void)rsp;  // just shut up compiler
     asm(
-    "    movq %rdi, %rsp\n"
-    "    popq %r15\n"
+    "    movq %rdi, %rsp\n"  // restore the stack from param
+    "    popq %r15\n"  // restore the registers
     "    popq %r14\n"
     "    popq %r13\n"
     "    popq %r12\n"
     "    popq %rbx\n"
     "    popq %rbp\n"
-    "    popq %rdi\n"
-    "    ret\n");
+    "    popq %rdi\n"  // restore the argument to "counter"
+    "    ret\n");  // return to the "counter" function
 }
 
 void coroutine_switch_context(void *rsp)
 {
-    contexts.items[contexts.current].rsp = rsp;
-    contexts.current = (contexts.current + 1)%contexts.count;
+    contexts.items[contexts.current].rsp = rsp;  // we save what we got from %rdi
+    contexts.current = (contexts.current + 1) % contexts.count;
+    if (contexts.current == 0 && contexts.count > 1) {
+        contexts.current = 1;
+    }
     coroutine_restore_context(contexts.items[contexts.current].rsp);
+    abort();  // unreachable code
 }
 
 void coroutine_init(void)
@@ -74,35 +86,44 @@ void coroutine_init(void)
     da_append(&contexts, (Context){0});
 }
 
+// 4096 = pow(2, 12)
 #define STACK_CAPACITY (4*1024)
+#define STACK_ALIGNMENT (sizeof(void*) == 8 ? 16 : 8)
 
 void coroutine_finish(void)
 {
-    // TODO: free the stack of finished coroutine
-    // TODO: by removing elements from the contexts array we invalidate ids
-
     if (contexts.current == 0) {
         contexts.count = 0;
+        // when current is 0, our stack is not on the heap
+        free(contexts.items);
         return;
     }
 
     Context t = contexts.items[contexts.current];
-    contexts.items[contexts.current] = contexts.items[contexts.count-1];
-    contexts.items[contexts.count-1] = t;
+    free((void*)t.stack_base);
     contexts.count -= 1;
     contexts.current %= contexts.count;
+    if (contexts.current == 0 && contexts.count > 1) {
+        contexts.current = 1;
+    }
     coroutine_restore_context(contexts.items[contexts.current].rsp);
 }
 
-void coroutine_go(void (*f)(void*), void *arg)
+void coroutine_add(void (* const f)(void*), void *arg)
 {
-    void *stack_base = malloc(STACK_CAPACITY); // TODO: align the stack to 16 bytes or whatever
+    /* Tell the coroutine where to go: call f(arg) then coroutine_finish */
+    if (contexts.count == 0)
+        coroutine_init();
+    assert(STACK_CAPACITY % STACK_ALIGNMENT == 0);
+    // XXX: implement base 2 logarithm to test STACK_ALIGNMENT is a power of 2
+    assert(STACK_CAPACITY % sizeof(void*) == 0);
+    const void *stack_base = aligned_alloc(STACK_ALIGNMENT, STACK_CAPACITY);
     void **rsp = (void**)((char*)stack_base + STACK_CAPACITY);
     *(--rsp) = coroutine_finish;
     *(--rsp) = f;
     *(--rsp) = arg; // push rdi
     *(--rsp) = 0;   // push rbx
-    *(--rsp) = 0;   // push rbp
+    *(--rsp) = (void*)stack_base;   // push rbp
     *(--rsp) = 0;   // push r12
     *(--rsp) = 0;   // push r13
     *(--rsp) = 0;   // push r14
@@ -120,5 +141,5 @@ size_t coroutine_id(void)
 
 size_t coroutine_alive(void)
 {
-    return contexts.count;
+    return contexts.count - 1;
 }

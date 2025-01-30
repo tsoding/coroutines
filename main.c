@@ -9,17 +9,18 @@ void counter(void *arg)
 {
     long int n = (long int)arg;
     for (int i = 0; i < n; ++i) {
-        printf("[%zu] %d\n", coroutine_id(), i);
+        printf("[%ld/%ld] %d\n", coroutine_id(), coroutine_alive(), i);
         coroutine_yield();
     }
 }
 
 int main()
 {
-    coroutine_init();
-        coroutine_go(&counter, (void*)5);
-        coroutine_go(&counter, (void*)10);
-        while (coroutine_alive() > 1) coroutine_yield();
-    coroutine_finish();
+    // Add the coroutines you want
+    coroutine_add(&counter, (void*)10);
+    coroutine_add(&counter, (void*)3);
+    // Yield to start the first coroutine
+    coroutine_yield();
+    printf("All of the coroutines reached their end\n");
     return 0;
 }
