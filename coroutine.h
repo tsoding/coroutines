@@ -1,8 +1,11 @@
 #ifndef COROUTINE_H_
 #define COROUTINE_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif // __cplusplus
+
 // TODO: consider making coroutine.h an stb-style single header library
-// TODO: make sure the library works with C++
 
 // Initialize the coroutine runtime. Must be called before using any other
 // functions of this API. After the initialization the currently running code is
@@ -30,5 +33,9 @@ size_t coroutine_id(void);
 // How many coroutines are currently alive. Could be used by the main coroutine
 // to wait until all the "child" coroutines have died.
 size_t coroutine_alive(void);
+
+#ifdef __cplusplus
+}
+#endif // __cplusplus
 
 #endif // COROUTINE_H_
