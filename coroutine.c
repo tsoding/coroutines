@@ -1,5 +1,8 @@
 #include <assert.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
+#include <string.h>
 
 // TODO: make the STACK_CAPACITY customizable by the user
 //#define STACK_CAPACITY (4*1024)
@@ -22,19 +25,35 @@
         (da)->items[(da)->count++] = (item);                                         \
     } while (0)
 
+#define da_swap(type, da, i, j)              \
+    do {                                     \
+        type t = (da)->items[(i)];           \
+        (da)->items[(i)] = (da)->items[(j)]; \
+        (da)->items[(j)] = t;                \
+    } while(0)
+
 typedef struct {
     void *rsp;
     void *stack_base;
+    bool dead;
 } Context;
 
 typedef struct {
     Context *items;
     size_t count;
     size_t capacity;
-    size_t current;
 } Contexts;
 
-Contexts contexts = {0};
+typedef struct {
+    size_t *items;
+    size_t count;
+    size_t capacity;
+} Indices;
+
+static size_t current     = 0;
+static Indices active     = {0};
+static Indices dead       = {0};
+static Contexts contexts_ = {0};
 
 // TODO: ARM support
 //   Requires modifications in all the @arch places
@@ -72,40 +91,56 @@ void __attribute__((naked)) coroutine_restore_context(void *rsp)
 
 void coroutine_switch_context(void *rsp)
 {
-    contexts.items[contexts.current].rsp = rsp;
-    contexts.current = (contexts.current + 1)%contexts.count;
-    coroutine_restore_context(contexts.items[contexts.current].rsp);
+    contexts_.items[active.items[current]].rsp = rsp;
+    current = (current + 1)%active.count;
+    coroutine_restore_context(contexts_.items[active.items[current]].rsp);
 }
 
 void coroutine_init(void)
 {
-    da_append(&contexts, (Context){0});
+    da_append(&contexts_, (Context){0});
+    da_append(&active, 0);
 }
 
 void coroutine_finish(void)
 {
-    // TODO: Reuse the stack for new coroutines.
-    // TODO: By removing elements from the contexts array we invalidate ids.
-
-    if (contexts.current == 0) {
-        contexts.count = 0;
+    if (current == 0) {
+        for (size_t i = 1; i < contexts_.count; ++i) {
+            free(contexts_.items[i].stack_base);
+        }
+        free(contexts_.items);
+        free(active.items);
+        free(dead.items);
+        memset(&contexts_, 0, sizeof(contexts_));
+        memset(&active, 0, sizeof(active));
+        memset(&dead, 0, sizeof(dead));
         return;
     }
 
-    Context t = contexts.items[contexts.current];
-    contexts.items[contexts.current] = contexts.items[contexts.count-1];
-    contexts.items[contexts.count-1] = t;
-    contexts.count -= 1;
-    contexts.current %= contexts.count;
-    coroutine_restore_context(contexts.items[contexts.current].rsp);
+    contexts_.items[active.items[current]].dead = true;
+    da_append(&dead, current);
+    da_swap(size_t, &active, current, active.count-1);
+    active.count -= 1;
+    current %= active.count;
+    coroutine_restore_context(contexts_.items[active.items[current]].rsp);
 }
 
 void coroutine_go(void (*f)(void*), void *arg)
 {
-    // TODO: Mark the page at the end of the stack buffer as non-readable, non-writable, non-executable to make stack overflows of coroutines more obvious in the debugger
-    //   This may require employing mmap(2) and mprotect(2) on Linux.
-    void *stack_base = malloc(STACK_CAPACITY); // TODO: align the stack to 16 bytes or whatever
-    void **rsp = (void**)((char*)stack_base + STACK_CAPACITY);
+    size_t id;
+    if (dead.count > 0) {
+        id = dead.items[--dead.count];
+        assert(contexts_.items[id].dead);
+        contexts_.items[id].dead = false;
+    } else {
+        // TODO: Mark the page at the end of the stack buffer as non-readable, non-writable, non-executable to make stack overflows of coroutines more obvious in the debugger
+        //   This may require employing mmap(2) and mprotect(2) on Linux.
+        da_append(&contexts_, ((Context){0}));
+        id = contexts_.count-1;
+        contexts_.items[id].stack_base = malloc(STACK_CAPACITY); // TODO: align the stack to 16 bytes or whatever
+    }
+
+    void **rsp = (void**)((char*)contexts_.items[id].stack_base + STACK_CAPACITY);
     // @arch
     *(--rsp) = coroutine_finish;
     *(--rsp) = f;
@@ -116,18 +151,18 @@ void coroutine_go(void (*f)(void*), void *arg)
     *(--rsp) = 0;   // push r13
     *(--rsp) = 0;   // push r14
     *(--rsp) = 0;   // push r15
-    da_append(&contexts, ((Context){
-        .rsp = rsp,
-        .stack_base = stack_base,
-    }));
+    contexts_.items[id].rsp = rsp;
+
+    da_append(&active, id);
 }
 
 size_t coroutine_id(void)
 {
-    return contexts.current;
+    return active.items[current];
 }
 
 size_t coroutine_alive(void)
 {
-    return contexts.count;
+    return active.count;
+}
 }

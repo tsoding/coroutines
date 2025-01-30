@@ -15,7 +15,7 @@ int main()
 {
     coroutine_init();
     coroutine_go([](void*) {
-        std::cout << "Hello from C++ Lambda" << std::endl;
+        std::cout << "[" << coroutine_id() << "] Hello from C++ Lambda" << std::endl;
     }, nullptr);
     coroutine_go(counter, reinterpret_cast<void*>(5));
     coroutine_go(counter, reinterpret_cast<void*>(10));
