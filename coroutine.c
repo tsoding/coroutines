@@ -74,7 +74,8 @@ void coroutine_init(void)
     da_append(&contexts, (Context){0});
 }
 
-#define STACK_CAPACITY (4*1024)
+//#define STACK_CAPACITY (4*1024)
+#define STACK_CAPACITY (4*1024*1024)
 
 void coroutine_finish(void)
 {
