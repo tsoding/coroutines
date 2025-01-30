@@ -1,16 +1,16 @@
-.PHONY: all
-all: main main_c3 echo
+.PHONY: examples
+examples: main main_c3 echo
 
-echo: echo.c3 coroutine.o coroutine.c3
-	cp coroutine.o echo.coroutine.o
-	c3c compile echo.c3 echo.coroutine.o coroutine.c3
+echo: examples/echo.c3 coroutine.o coroutine.c3
+	cp coroutine.o echo.coroutine.o # c3c deletes the object files for some reason, so we make a copy to preserve the original
+	c3c compile examples/echo.c3 echo.coroutine.o coroutine.c3
 
-main: main.c coroutine.o
-	gcc -Wall -Wextra -ggdb -o main main.c coroutine.o
+main: examples/main.c coroutine.o
+	gcc -I. -Wall -Wextra -ggdb -o main examples/main.c coroutine.o
+
+main_c3: examples/main.c3 coroutine.o coroutine.c3
+	cp coroutine.o main.coroutine.o # c3c deletes the object files for some reason, so we make a copy to preserve the original
+	c3c compile examples/main.c3 coroutine.c3 main.coroutine.o
 
 coroutine.o: coroutine.c
 	gcc -Wall -Wextra -ggdb -c coroutine.c
-
-main_c3: main.c3 coroutine.o coroutine.c3
-	cp coroutine.o main.coroutine.o
-	c3c compile main.c3 coroutine.c3 main.coroutine.o
