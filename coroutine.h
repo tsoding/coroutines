@@ -34,6 +34,9 @@ size_t coroutine_id(void);
 // to wait until all the "child" coroutines have died.
 size_t coroutine_alive(void);
 
+void coroutine_sleep_read(int fd);
+void coroutine_sleep_write(int fd);
+
 #ifdef __cplusplus
 }
 #endif // __cplusplus

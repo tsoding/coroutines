@@ -4,9 +4,14 @@
 #include <stdbool.h>
 #include <string.h>
 
+#include <poll.h>
+#include <unistd.h>
+
+#include "coroutine.h"
+
 // TODO: make the STACK_CAPACITY customizable by the user
 //#define STACK_CAPACITY (4*1024)
-#define STACK_CAPACITY (4*1024*1024)
+#define STACK_CAPACITY (20*1024*1024)
 
 // Initial capacity of a dynamic array
 #ifndef DA_INIT_CAP
@@ -32,6 +37,15 @@
         (da)->items[(j)] = t;                \
     } while(0)
 
+#define da_remove_unordered(type, da, i) \
+    do { \
+        da_swap(type, (da), (i), (da)->count-1); \
+        (da)->count -= 1; \
+    } while(0)
+
+#define TODO(message) do { fprintf(stderr, "%s:%d: TODO: %s\n", __FILE__, __LINE__, message); abort(); } while(0)
+#define UNREACHABLE(message) do { fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, message); abort(); } while(0)
+
 typedef struct {
     void *rsp;
     void *stack_base;
@@ -50,13 +64,36 @@ typedef struct {
     size_t capacity;
 } Indices;
 
+typedef struct {
+    int key;                    // file descriptor of the socket
+    size_t value;               // coroutine id
+} Sleep;
+
+typedef struct {
+    Sleep *items;
+    size_t count;
+    size_t capacity;
+} Sleeps;
+
+typedef struct {
+    struct pollfd *items;
+    size_t count;
+    size_t capacity;
+} Polls;
+
 static size_t current     = 0;
 static Indices active     = {0};
 static Indices dead       = {0};
 static Contexts contexts_ = {0};
+static Indices asleep     = {0};
+static Polls polls        = {0};
 
 // TODO: ARM support
 //   Requires modifications in all the @arch places
+
+
+// Linux x86_64 call convention
+// %rdi, %rsi, %rdx, %rcx, %r8, and %r9
 
 void __attribute__((naked)) coroutine_yield(void)
 {
@@ -69,9 +106,52 @@ void __attribute__((naked)) coroutine_yield(void)
     "    pushq %r13\n"
     "    pushq %r14\n"
     "    pushq %r15\n"
-    "    movq %rsp, %rdi\n"
+    "    movq %rsp, %rdi\n"     // rsp
+    "    movq $0, %rsi\n"       // sm
     "    jmp coroutine_switch_context\n");
 }
+
+void __attribute__((naked)) coroutine_sleep_read(int fd)
+{
+    (void) fd;
+    // @arch
+    asm(
+    "    pushq %rdi\n"
+    "    pushq %rbp\n"
+    "    pushq %rbx\n"
+    "    pushq %r12\n"
+    "    pushq %r13\n"
+    "    pushq %r14\n"
+    "    pushq %r15\n"
+    "    movq %rdi, %rdx\n"     // fd
+    "    movq %rsp, %rdi\n"     // rsp
+    "    movq $1, %rsi\n"       // sm
+    "    jmp coroutine_switch_context\n");
+}
+
+void __attribute__((naked)) coroutine_sleep_write(int fd)
+{
+    (void) fd;
+    // @arch
+    asm(
+    "    pushq %rdi\n"
+    "    pushq %rbp\n"
+    "    pushq %rbx\n"
+    "    pushq %r12\n"
+    "    pushq %r13\n"
+    "    pushq %r14\n"
+    "    pushq %r15\n"
+    "    movq %rdi, %rdx\n"     // fd
+    "    movq %rsp, %rdi\n"     // rsp
+    "    movq $2, %rsi\n"       // sm
+    "    jmp coroutine_switch_context\n");
+}
+
+typedef enum {
+    SM_NONE = 0,
+    SM_READ,
+    SM_WRITE,
+} Sleep_Mode;
 
 void __attribute__((naked)) coroutine_restore_context(void *rsp)
 {
@@ -89,10 +169,48 @@ void __attribute__((naked)) coroutine_restore_context(void *rsp)
     "    ret\n");
 }
 
-void coroutine_switch_context(void *rsp)
+void coroutine_switch_context(void *rsp, Sleep_Mode sm, int fd)
 {
     contexts_.items[active.items[current]].rsp = rsp;
-    current = (current + 1)%active.count;
+
+    switch (sm) {
+    case SM_NONE: current += 1; break;
+    case SM_READ: {
+        da_append(&asleep, active.items[current]);
+        struct pollfd pfd = {.fd = fd, .events = POLLRDNORM,};
+        da_append(&polls, pfd);
+        da_remove_unordered(size_t, &active, current);
+    } break;
+
+    case SM_WRITE: {
+        da_append(&asleep, active.items[current]);
+        struct pollfd pfd = {.fd = fd, .events = POLLWRNORM,};
+        da_append(&polls, pfd);
+        da_remove_unordered(size_t, &active, current);
+    } break;
+
+    default: UNREACHABLE("coroutine_switch_context");
+    }
+
+    if (polls.count > 0) {
+        int timeout = active.count == 0 ? -1 : 0;
+        int result = poll(polls.items, polls.count, timeout);
+        if (result < 0) TODO("poll");
+
+        for (size_t i = 0; i < polls.count;) {
+            if (polls.items[i].revents) {
+                size_t id = asleep.items[i];
+                da_remove_unordered(struct pollfd, &polls, i);
+                da_remove_unordered(size_t, &asleep, i);
+                da_append(&active, id);
+            } else {
+                ++i;
+            }
+        }
+    }
+
+    assert(active.count > 0);
+    current %= active.count;
     coroutine_restore_context(contexts_.items[active.items[current]].rsp);
 }
 
@@ -104,23 +222,45 @@ void coroutine_init(void)
 
 void coroutine_finish(void)
 {
-    if (current == 0) {
+    if (active.items[current] == 0) {
         for (size_t i = 1; i < contexts_.count; ++i) {
             free(contexts_.items[i].stack_base);
         }
         free(contexts_.items);
         free(active.items);
         free(dead.items);
+        free(polls.items);
+        free(asleep.items);
         memset(&contexts_, 0, sizeof(contexts_));
-        memset(&active, 0, sizeof(active));
-        memset(&dead, 0, sizeof(dead));
+        memset(&active,    0, sizeof(active));
+        memset(&dead,      0, sizeof(dead));
+        memset(&polls,     0, sizeof(polls));
+        memset(&asleep,    0, sizeof(asleep));
         return;
     }
 
     contexts_.items[active.items[current]].dead = true;
-    da_append(&dead, current);
-    da_swap(size_t, &active, current, active.count-1);
-    active.count -= 1;
+    da_append(&dead, active.items[current]);
+    da_remove_unordered(size_t, &active, current);
+
+    if (polls.count > 0) {
+        int timeout = active.count == 0 ? -1 : 0;
+        int result = poll(polls.items, polls.count, timeout);
+        if (result < 0) TODO("poll");
+
+        for (size_t i = 0; i < polls.count;) {
+            if (polls.items[i].revents) {
+                size_t id = asleep.items[i];
+                da_remove_unordered(struct pollfd, &polls, i);
+                da_remove_unordered(size_t, &asleep, i);
+                da_append(&active, id);
+            } else {
+                ++i;
+            }
+        }
+    }
+
+    assert(active.count > 0);
     current %= active.count;
     coroutine_restore_context(contexts_.items[active.items[current]].rsp);
 }
