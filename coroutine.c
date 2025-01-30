@@ -59,17 +59,6 @@ typedef struct {
 } Indices;
 
 typedef struct {
-    int key;                    // file descriptor of the socket
-    size_t value;               // coroutine id
-} Sleep;
-
-typedef struct {
-    Sleep *items;
-    size_t count;
-    size_t capacity;
-} Sleeps;
-
-typedef struct {
     struct pollfd *items;
     size_t count;
     size_t capacity;
