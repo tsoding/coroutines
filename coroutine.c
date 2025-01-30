@@ -30,17 +30,11 @@
         (da)->items[(da)->count++] = (item);                                         \
     } while (0)
 
-#define da_swap(type, da, i, j)              \
-    do {                                     \
-        type t = (da)->items[(i)];           \
-        (da)->items[(i)] = (da)->items[(j)]; \
-        (da)->items[(j)] = t;                \
-    } while(0)
-
-#define da_remove_unordered(type, da, i) \
-    do { \
-        da_swap(type, (da), (i), (da)->count-1); \
-        (da)->count -= 1; \
+#define da_remove_unordered(da, i)                   \
+    do {                                             \
+        size_t j = (i);                              \
+        assert(j < (da)->count);                     \
+        (da)->items[j] = (da)->items[--(da)->count]; \
     } while(0)
 
 #define TODO(message) do { fprintf(stderr, "%s:%d: TODO: %s\n", __FILE__, __LINE__, message); abort(); } while(0)
@@ -180,14 +174,14 @@ void coroutine_switch_context(void *rsp, Sleep_Mode sm, int fd)
         da_append(&asleep, active.items[current]);
         struct pollfd pfd = {.fd = fd, .events = POLLRDNORM,};
         da_append(&polls, pfd);
-        da_remove_unordered(size_t, &active, current);
+        da_remove_unordered(&active, current);
     } break;
 
     case SM_WRITE: {
         da_append(&asleep, active.items[current]);
         struct pollfd pfd = {.fd = fd, .events = POLLWRNORM,};
         da_append(&polls, pfd);
-        da_remove_unordered(size_t, &active, current);
+        da_remove_unordered(&active, current);
     } break;
 
     default: UNREACHABLE("coroutine_switch_context");
@@ -201,8 +195,8 @@ void coroutine_switch_context(void *rsp, Sleep_Mode sm, int fd)
         for (size_t i = 0; i < polls.count;) {
             if (polls.items[i].revents) {
                 size_t id = asleep.items[i];
-                da_remove_unordered(struct pollfd, &polls, i);
-                da_remove_unordered(size_t, &asleep, i);
+                da_remove_unordered(&polls, i);
+                da_remove_unordered(&asleep, i);
                 da_append(&active, id);
             } else {
                 ++i;
@@ -242,7 +236,7 @@ void coroutine_finish(void)
 
     contexts_.items[active.items[current]].dead = true;
     da_append(&dead, active.items[current]);
-    da_remove_unordered(size_t, &active, current);
+    da_remove_unordered(&active, current);
 
     if (polls.count > 0) {
         int timeout = active.count == 0 ? -1 : 0;
@@ -252,8 +246,8 @@ void coroutine_finish(void)
         for (size_t i = 0; i < polls.count;) {
             if (polls.items[i].revents) {
                 size_t id = asleep.items[i];
-                da_remove_unordered(struct pollfd, &polls, i);
-                da_remove_unordered(size_t, &asleep, i);
+                da_remove_unordered(&polls, i);
+                da_remove_unordered(&asleep, i);
                 da_append(&active, id);
             } else {
                 ++i;
