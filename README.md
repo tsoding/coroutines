@@ -6,5 +6,5 @@ Custom coroutines implementation in GNU C.
 
 ```console
 $ make
-$ ./main
+$ ./counter
 ```

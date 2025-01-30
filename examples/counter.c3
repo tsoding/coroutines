@@ -1,9 +1,9 @@
-module main_c3;
+// Almost the same as counter.c but in C3
+module counter_c3;
 import coroutine;
 import std::io;
 
-fn void counter(void* arg)
-{
+fn void counter(void* arg) {
     usz n = (usz)arg;
     for (usz i = 0; i < n; ++i) {
         io::printfn("[%d] %d", coroutine::id(), i);
@@ -17,7 +17,7 @@ fn void main() {
     coroutine::go(fn void(void *arg) {
         io::printfn("Hello from Lambda");
     });
-    coroutine::go(&counter, (void*)20);
     coroutine::go(&counter, (void*)5);
+    coroutine::go(&counter, (void*)10);
     while (coroutine::alive() > 1) coroutine::yield();
 }

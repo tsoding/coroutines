@@ -1,6 +1,9 @@
 #ifndef COROUTINE_H_
 #define COROUTINE_H_
 
+// TODO: document the API
+// TODO: consider making coroutine.h an stb-style single header library
+
 void coroutine_init(void);
 void coroutine_finish(void);
 void coroutine_yield(void);
