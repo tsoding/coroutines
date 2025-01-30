@@ -165,4 +165,3 @@ size_t coroutine_alive(void)
 {
     return active.count;
 }
-}
