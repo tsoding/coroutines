@@ -42,6 +42,9 @@ void coroutine_sleep_read(int fd);
 // Trying to write to fd after coroutine_sleep_write() should not cause EAGAIN.
 void coroutine_sleep_write(int fd);
 
+// TODO: implement sleeping by timeout
+// TODO: add timeouts to coroutine_sleep_read() and coroutine_sleep_write()
+
 #ifdef __cplusplus
 }
 #endif // __cplusplus
