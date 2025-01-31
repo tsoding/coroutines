@@ -37,6 +37,7 @@
         (da)->items[j] = (da)->items[--(da)->count]; \
     } while(0)
 
+#define UNUSED(x) (void)(x)
 #define TODO(message) do { fprintf(stderr, "%s:%d: TODO: %s\n", __FILE__, __LINE__, message); abort(); } while(0)
 #define UNREACHABLE(message) do { fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, message); abort(); } while(0)
 
@@ -284,4 +285,17 @@ size_t coroutine_id(void)
 size_t coroutine_alive(void)
 {
     return active.count;
+}
+
+void coroutine_wake_up(size_t id)
+{
+    // @speed coroutine_wake_up is linear
+    for (size_t i = 0; i < asleep.count; ++i) {
+        if (asleep.items[i] == id) {
+            da_remove_unordered(&asleep, id);
+            da_remove_unordered(&polls, id);
+            da_append(&active, id);
+            return;
+        }
+    }
 }

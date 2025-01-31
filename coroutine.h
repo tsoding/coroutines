@@ -34,13 +34,21 @@ size_t coroutine_id(void);
 // to wait until all the "child" coroutines have died.
 size_t coroutine_alive(void);
 
-// Put the current coroutine to sleep until the non-blocking socket `fd` has avaliable data to read.
-// Trying to read from fd after coroutine_sleep_read() should not cause EAGAIN.
+// Put the current coroutine to sleep until the non-blocking socket `fd` has
+// avaliable data to read. Trying to read from fd after coroutine_sleep_read()
+// may still cause EAGAIN, if the coroutine was woken up by coroutine_wake_up
+// before the socket became available for reading.
 void coroutine_sleep_read(int fd);
 
-// Put the current coroutine to sleep until the non-blocking socket `fd` is ready to accept data to write.
-// Trying to write to fd after coroutine_sleep_write() should not cause EAGAIN.
+// Put the current coroutine to sleep until the non-blocking socket `fd` is
+// ready to accept data to write. Trying to write to fd after
+// coroutine_sleep_write() may still cause EAGAIN, if the coroutine was woken up
+// by coroutine_wake_up before the socket became available for writing.
 void coroutine_sleep_write(int fd);
+
+// Wake up coroutine by id if it is currently sleeping due to
+// coroutine_sleep_read() or coroutine_sleep_write() calls.
+void coroutine_wake_up(size_t id);
 
 // TODO: implement sleeping by timeout
 // TODO: add timeouts to coroutine_sleep_read() and coroutine_sleep_write()
