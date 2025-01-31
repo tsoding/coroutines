@@ -43,7 +43,6 @@
 typedef struct {
     void *rsp;
     void *stack_base;
-    bool dead;
 } Context;
 
 typedef struct {
@@ -223,7 +222,6 @@ void coroutine_finish(void)
         return;
     }
 
-    contexts.items[active.items[current]].dead = true;
     da_append(&dead, active.items[current]);
     da_remove_unordered(&active, current);
 
@@ -254,8 +252,6 @@ void coroutine_go(void (*f)(void*), void *arg)
     size_t id;
     if (dead.count > 0) {
         id = dead.items[--dead.count];
-        assert(contexts.items[id].dead);
-        contexts.items[id].dead = false;
     } else {
         // TODO: Mark the page at the end of the stack buffer as non-readable, non-writable, non-executable to make stack overflows of coroutines more obvious in the debugger
         //   This may require employing mmap(2) and mprotect(2) on Linux.
