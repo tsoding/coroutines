@@ -33,6 +33,12 @@ fn void main() {
                 usz n = client_sock.read(buf)!!;
                 if (n == 0) break OUTER;
                 char[] chunk = buf[0:n];
+
+                if (((String)chunk).trim() == "quit") {
+                    io::printfn("[%d] Client requested to quit", coroutine::id(), chunk.len);
+                    return;
+                }
+
                 io::printfn("[%d] Client sent %d bytes", coroutine::id(), chunk.len);
 
                 while (chunk.len > 0) {
