@@ -1,4 +1,4 @@
-// coroutine bindings for C3
+// coroutine bindings for C3 (see coroutine.h for the API documentation)
 module coroutine;
 import std::net;
 
