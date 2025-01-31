@@ -11,6 +11,6 @@ Custom coroutines implementation in GNU C.
 ## Quick Start
 
 ```console
-$ make ./build/counter
+$ make
 $ ./build/counter
 ```
