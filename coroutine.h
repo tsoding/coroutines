@@ -34,7 +34,12 @@ size_t coroutine_id(void);
 // to wait until all the "child" coroutines have died.
 size_t coroutine_alive(void);
 
+// Put the current coroutine to sleep until the non-blocking socket `fd` has avaliable data to read.
+// Trying to read from fd after coroutine_sleep_read() should not cause EAGAIN.
 void coroutine_sleep_read(int fd);
+
+// Put the current coroutine to sleep until the non-blocking socket `fd` is ready to accept data to write.
+// Trying to write to fd after coroutine_sleep_write() should not cause EAGAIN.
 void coroutine_sleep_write(int fd);
 
 #ifdef __cplusplus
