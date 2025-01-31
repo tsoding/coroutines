@@ -200,12 +200,14 @@ void coroutine_switch_context(void *rsp, Sleep_Mode sm, int fd)
 
 void coroutine_init(void)
 {
+    if (contexts.count != 0) return;
     da_append(&contexts, (Context){0});
     da_append(&active, 0);
 }
 
 void coroutine_finish(void)
 {
+    if (contexts.count == 0) return;
     if (active.items[current] == 0) {
         for (size_t i = 1; i < contexts.count; ++i) {
             free(contexts.items[i].stack_base);
