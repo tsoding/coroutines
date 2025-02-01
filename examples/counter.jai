@@ -42,4 +42,26 @@ main :: () {
         output_path = "../build/",
         output_executable_name = "counter_jai",
     });
+
+    coroutine_init();
+    defer coroutine_finish();
+    coroutine_go((arg: *void) #c_call {
+        push_context {
+            for 0..5 {
+                print("[%] You can actually use\n", coroutine_id());
+                coroutine_yield();
+            }
+        }
+    });
+    coroutine_go((arg: *void) #c_call {
+        push_context {
+            for 0..5 {
+                print("[%] coroutines at compile-time\n", coroutine_id());
+                coroutine_yield();
+            }
+        }
+    });
+    while coroutine_alive() > 1 {
+        coroutine_yield();
+    }
 }
