@@ -23,7 +23,7 @@
     do {                                                                             \
         if ((da)->count >= (da)->capacity) {                                         \
             (da)->capacity = (da)->capacity == 0 ? DA_INIT_CAP : (da)->capacity*2;   \
-            (da)->items = realloc((da)->items, (da)->capacity*sizeof(*(da)->items)); \
+            (da)->items = COROUTINE_REALLOC((da)->items, (da)->capacity*sizeof(*(da)->items)); \
             assert((da)->items != NULL && "Buy more RAM lol");                       \
         }                                                                            \
                                                                                      \
@@ -207,13 +207,13 @@ void coroutine_finish(void)
 {
     if (active.items[current] == 0) {
         for (size_t i = 1; i < contexts.count; ++i) {
-            free(contexts.items[i].stack_base);
+            COROUTINE_FREE(contexts.items[i].stack_base);
         }
-        free(contexts.items);
-        free(active.items);
-        free(dead.items);
-        free(polls.items);
-        free(asleep.items);
+        COROUTINE_FREE(contexts.items);
+        COROUTINE_FREE(active.items);
+        COROUTINE_FREE(dead.items);
+        COROUTINE_FREE(polls.items);
+        COROUTINE_FREE(asleep.items);
         memset(&contexts,  0, sizeof(contexts));
         memset(&active,    0, sizeof(active));
         memset(&dead,      0, sizeof(dead));
@@ -257,7 +257,7 @@ void coroutine_go(void (*f)(void*), void *arg)
         //   This may require employing mmap(2) and mprotect(2) on Linux.
         da_append(&contexts, ((Context){0}));
         id = contexts.count-1;
-        contexts.items[id].stack_base = malloc(STACK_CAPACITY); // TODO: align the stack to 16 bytes or whatever
+        contexts.items[id].stack_base = COROUTINE_MALLOC(STACK_CAPACITY); // TODO: align the stack to 16 bytes or whatever
     }
 
     void **rsp = (void**)((char*)contexts.items[id].stack_base + STACK_CAPACITY);

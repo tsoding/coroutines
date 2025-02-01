@@ -25,6 +25,19 @@
 // them (on x86_64 literally swaps out the value of the RSP register) on every
 // coroutine_yield(), coroutine_sleep_read(), or coroutine_sleep_write().
 
+// Custom allocator macros
+#ifndef COROUTINE_MALLOC
+#   define COROUTINE_MALLOC(size) malloc(size)
+#endif
+
+#ifndef COROUTINE_REALLOC
+#   define COROUTINE_REALLOC(pointer, size) realloc(pointer, size)
+#endif
+
+#ifndef COROUTINE_FREE
+#   define COROUTINE_FREE(pointer) free(pointer)
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
