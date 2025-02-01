@@ -36,3 +36,7 @@ Make sure you have all the corresponding compilers for the languages.
 - Linux x86_64
 
 *More are planned in the future*
+
+## Special Thanks
+
+This library is heavily inspired by [libmill](https://libmill.org/) and [libdill](https://libdill.org/).
