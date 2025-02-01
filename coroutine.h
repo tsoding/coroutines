@@ -12,9 +12,9 @@
 // time is waiting on IO. So with coroutines you have an opportunity to do
 // coroutine_yield() and go do something else. It is not useful to split up
 // heavy CPU computations because they all going to be executed on a single
-// thread. Use proper thread for that (pthreads on POSIX).
+// thread. Use proper threads for that (pthreads on POSIX).
 //
-// Good uses case for coroutines are usually Network Applications and UI.
+// Good use cases for coroutines are usually Network Applications and UI.
 // Anything with a slow Async IO.
 //
 // # How does it work?
