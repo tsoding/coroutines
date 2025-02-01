@@ -1,3 +1,4 @@
+// Almost the same as counter.c but in Jai
 #import "Basic";
 
 coroutine :: #library "../build/coroutine";
