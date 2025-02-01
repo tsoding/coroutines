@@ -75,6 +75,11 @@ static Polls polls        = {0};
 // TODO: ARM support
 //   Requires modifications in all the @arch places
 
+typedef enum {
+    SM_NONE = 0,
+    SM_READ,
+    SM_WRITE,
+} Sleep_Mode;
 
 // Linux x86_64 call convention
 // %rdi, %rsi, %rdx, %rcx, %r8, and %r9
@@ -91,7 +96,7 @@ void __attribute__((naked)) coroutine_yield(void)
     "    pushq %r14\n"
     "    pushq %r15\n"
     "    movq %rsp, %rdi\n"     // rsp
-    "    movq $0, %rsi\n"       // sm
+    "    movq $0, %rsi\n"       // sm = SM_NONE
     "    jmp coroutine_switch_context\n");
 }
 
@@ -109,7 +114,7 @@ void __attribute__((naked)) coroutine_sleep_read(int fd)
     "    pushq %r15\n"
     "    movq %rdi, %rdx\n"     // fd
     "    movq %rsp, %rdi\n"     // rsp
-    "    movq $1, %rsi\n"       // sm
+    "    movq $1, %rsi\n"       // sm = SM_READ
     "    jmp coroutine_switch_context\n");
 }
 
@@ -127,15 +132,9 @@ void __attribute__((naked)) coroutine_sleep_write(int fd)
     "    pushq %r15\n"
     "    movq %rdi, %rdx\n"     // fd
     "    movq %rsp, %rdi\n"     // rsp
-    "    movq $2, %rsi\n"       // sm
+    "    movq $2, %rsi\n"       // sm = SM_WRITE
     "    jmp coroutine_switch_context\n");
 }
-
-typedef enum {
-    SM_NONE = 0,
-    SM_READ,
-    SM_WRITE,
-} Sleep_Mode;
 
 void __attribute__((naked)) coroutine_restore_context(void *rsp)
 {
@@ -215,7 +214,7 @@ void coroutine_finish(void)
         free(dead.items);
         free(polls.items);
         free(asleep.items);
-        memset(&contexts, 0, sizeof(contexts));
+        memset(&contexts,  0, sizeof(contexts));
         memset(&active,    0, sizeof(active));
         memset(&dead,      0, sizeof(dead));
         memset(&polls,     0, sizeof(polls));
