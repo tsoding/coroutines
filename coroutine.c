@@ -71,15 +71,11 @@ static Indices dead       = {0};
 static Contexts contexts  = {0};
 static Indices asleep     = {0};
 static Polls polls        = {0};
+static size_t running_id  = 0;
 
 // TODO: ARM support
 //   Requires modifications in all the @arch places
 
-typedef enum {
-    SM_NONE = 0,
-    SM_READ,
-    SM_WRITE,
-} Sleep_Mode;
 
 // Linux x86_64 call convention
 // %rdi, %rsi, %rdx, %rcx, %r8, and %r9
@@ -96,45 +92,39 @@ void __attribute__((naked)) coroutine_yield(void)
     "    pushq %r14\n"
     "    pushq %r15\n"
     "    movq %rsp, %rdi\n"     // rsp
-    "    movq $0, %rsi\n"       // sm = SM_NONE
+    "    movq $0, %rsi\n"       // sm
     "    jmp coroutine_switch_context\n");
 }
 
-void __attribute__((naked)) coroutine_sleep_read(int fd)
+// NOTE(proto): I guess this was being implemented up to 1:32:19 @ https://www.youtube.com/watch?v=jwb7SmyGr3A
+// Until tsodin changed the aproach. But I think it was quite a interesting approach.
+void coroutine_sleep_read(int fd)
 {
-    (void) fd;
-    // @arch
-    asm(
-    "    pushq %rdi\n"
-    "    pushq %rbp\n"
-    "    pushq %rbx\n"
-    "    pushq %r12\n"
-    "    pushq %r13\n"
-    "    pushq %r14\n"
-    "    pushq %r15\n"
-    "    movq %rdi, %rdx\n"     // fd
-    "    movq %rsp, %rdi\n"     // rsp
-    "    movq $1, %rsi\n"       // sm = SM_READ
-    "    jmp coroutine_switch_context\n");
+    da_append(&asleep, running_id);
+    struct pollfd pfd = {.fd = fd, .events = POLLRDNORM,};
+    da_append(&polls, pfd);
+    // we are not active anymore
+    // TODO(proto): running_id -> index on active or remove_the_curent_running_thing
+    // @random_robin
+    da_remove_unordered(&active, current);
+    coroutine_yield();
 }
 
-void __attribute__((naked)) coroutine_sleep_write(int fd)
+void coroutine_sleep_write(int fd)
 {
-    (void) fd;
-    // @arch
-    asm(
-    "    pushq %rdi\n"
-    "    pushq %rbp\n"
-    "    pushq %rbx\n"
-    "    pushq %r12\n"
-    "    pushq %r13\n"
-    "    pushq %r14\n"
-    "    pushq %r15\n"
-    "    movq %rdi, %rdx\n"     // fd
-    "    movq %rsp, %rdi\n"     // rsp
-    "    movq $2, %rsi\n"       // sm = SM_WRITE
-    "    jmp coroutine_switch_context\n");
+    da_append(&asleep, running_id);
+    struct pollfd pfd = {.fd = fd, .events = POLLWRNORM,};
+    da_append(&polls, pfd);
+    // @random_robin
+    da_remove_unordered(&active, current);
+    coroutine_yield();
 }
+
+typedef enum {
+    SM_NONE = 0,
+    SM_READ,
+    SM_WRITE,
+} Sleep_Mode;
 
 void __attribute__((naked)) coroutine_restore_context(void *rsp)
 {
@@ -152,29 +142,9 @@ void __attribute__((naked)) coroutine_restore_context(void *rsp)
     "    ret\n");
 }
 
-void coroutine_switch_context(void *rsp, Sleep_Mode sm, int fd)
+// NOTE(proto): kind of a round robin, but sometimes it is not fair
+static void random_robin()
 {
-    contexts.items[active.items[current]].rsp = rsp;
-
-    switch (sm) {
-    case SM_NONE: current += 1; break;
-    case SM_READ: {
-        da_append(&asleep, active.items[current]);
-        struct pollfd pfd = {.fd = fd, .events = POLLRDNORM,};
-        da_append(&polls, pfd);
-        da_remove_unordered(&active, current);
-    } break;
-
-    case SM_WRITE: {
-        da_append(&asleep, active.items[current]);
-        struct pollfd pfd = {.fd = fd, .events = POLLWRNORM,};
-        da_append(&polls, pfd);
-        da_remove_unordered(&active, current);
-    } break;
-
-    default: UNREACHABLE("coroutine_switch_context");
-    }
-
     if (polls.count > 0) {
         int timeout = active.count == 0 ? -1 : 0;
         int result = poll(polls.items, polls.count, timeout);
@@ -193,8 +163,34 @@ void coroutine_switch_context(void *rsp, Sleep_Mode sm, int fd)
     }
 
     assert(active.count > 0);
+    /*
+        # random_robin scheduling
+
+        @random_robin
+
+        This ugly hack happens because there is a coupling between the way the
+        scheduler chooses the next corroutine, and the current running corroutine.
+        On most cases, `running_id` is equal to `active.items[current]`.
+        But at `corroutine_sleep_read/write` when we remove `current` from `active`,
+        we must keep track of `running_id` to store the `rsp` from the yield.
+
+        I guess `current` is more like a internal state for the scheduler.
+         we can implement a proper round robin fixing this hack
+        with linked lists finally decoupling `scheduler_next` from `running_id`
+        and have a more predictable scheduling if we realy care. And do we even care?
+        because `da_remove_unordered` is scrambling the order of our corroutines anyway.
+    */
+    // TODO(proto): make proper round robin with linked lists?
+    current += 1;
     current %= active.count;
-    coroutine_restore_context(contexts.items[active.items[current]].rsp);
+    running_id = active.items[current];
+    coroutine_restore_context(contexts.items[running_id].rsp);
+}
+
+void coroutine_switch_context(void *rsp)
+{
+    contexts.items[running_id].rsp = rsp;
+    random_robin();
 }
 
 void coroutine_init(void)
@@ -205,7 +201,7 @@ void coroutine_init(void)
 
 void coroutine_finish(void)
 {
-    if (active.items[current] == 0) {
+    if (running_id == 0) {
         for (size_t i = 1; i < contexts.count; ++i) {
             free(contexts.items[i].stack_base);
         }
@@ -214,37 +210,20 @@ void coroutine_finish(void)
         free(dead.items);
         free(polls.items);
         free(asleep.items);
-        memset(&contexts,  0, sizeof(contexts));
+        memset(&contexts, 0, sizeof(contexts));
         memset(&active,    0, sizeof(active));
         memset(&dead,      0, sizeof(dead));
         memset(&polls,     0, sizeof(polls));
         memset(&asleep,    0, sizeof(asleep));
+        running_id = 0;
         return;
     }
 
-    da_append(&dead, active.items[current]);
+    da_append(&dead, running_id);
+    // @random_robin
     da_remove_unordered(&active, current);
 
-    if (polls.count > 0) {
-        int timeout = active.count == 0 ? -1 : 0;
-        int result = poll(polls.items, polls.count, timeout);
-        if (result < 0) TODO("poll");
-
-        for (size_t i = 0; i < polls.count;) {
-            if (polls.items[i].revents) {
-                size_t id = asleep.items[i];
-                da_remove_unordered(&polls, i);
-                da_remove_unordered(&asleep, i);
-                da_append(&active, id);
-            } else {
-                ++i;
-            }
-        }
-    }
-
-    assert(active.count > 0);
-    current %= active.count;
-    coroutine_restore_context(contexts.items[active.items[current]].rsp);
+    random_robin();
 }
 
 void coroutine_go(void (*f)(void*), void *arg)
@@ -278,7 +257,7 @@ void coroutine_go(void (*f)(void*), void *arg)
 
 size_t coroutine_id(void)
 {
-    return active.items[current];
+    return running_id;
 }
 
 size_t coroutine_alive(void)
