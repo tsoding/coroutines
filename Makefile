@@ -1,5 +1,5 @@
 build/counter: examples/counter.c coroutine.h build/coroutine.a
-	gcc -I. -Wall -Wextra -ggdb -o build/counter examples/counter.c build/coroutine.a
+	gcc -I. -Wall -Wextra -ggdb -o build/counter examples/counter.c examples/myalloc.c build/coroutine.a
 
 .PHONY: examples
 examples: build/counter build/counter_cpp build/counter_c3 build/counter_jai build/echo
