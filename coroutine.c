@@ -83,6 +83,23 @@ static size_t running_id  = 0;
 void __attribute__((naked)) coroutine_yield(void)
 {
     // @arch
+#ifdef __aarch64__
+    asm(
+    "   sub sp, sp, #0x70\n"
+    "   stp x19, x20, [sp,#0]\n"
+    "   stp x21, x22, [sp,#16]\n"
+    "   stp x23, x24, [sp,#32]\n"
+    "   stp x25, x26, [sp,#48]\n"
+    "   stp x27, x28, [sp,#64]\n"
+    "   stp x29, x30, [sp,#80]\n"
+    "   str x0, [sp,#104]\n"
+    "   adr x0, coroutine_yield\n" // hack
+    "   str x0, [sp,#96]\n"
+    "   mov x0, sp\n"            // sp
+    "   mov x1, #0\n"            // sp
+    "   b coroutine_switch_context\n"
+    );
+#else
     asm(
     "    pushq %rdi\n"
     "    pushq %rbp\n"
@@ -92,8 +109,8 @@ void __attribute__((naked)) coroutine_yield(void)
     "    pushq %r14\n"
     "    pushq %r15\n"
     "    movq %rsp, %rdi\n"     // rsp
-    "    movq $0, %rsi\n"       // sm
     "    jmp coroutine_switch_context\n");
+#endif
 }
 
 // NOTE(proto): I guess this was being implemented up to 1:32:19 @ https://www.youtube.com/watch?v=jwb7SmyGr3A
@@ -128,8 +145,24 @@ typedef enum {
 
 void __attribute__((naked)) coroutine_restore_context(void *rsp)
 {
-    // @arch
     (void)rsp;
+    // @arch
+#ifdef __aarch64__
+    asm(
+    "   mov sp, x0\n"
+    "   ldp x19, x20, [sp,#0]\n"
+    "   ldp x21, x22, [sp,#16]\n"
+    "   ldp x23, x24, [sp,#32]\n"
+    "   ldp x25, x26, [sp,#48]\n"
+    "   ldp x27, x28, [sp,#64]\n"
+    "   ldp x29, x30, [sp,#80]\n"
+    "   mov x1, x30\n"
+    "   ldr x30,      [sp, #96]\n"
+    "   ldr x0,       [sp, #104]\n"
+    "   add sp, sp, #0x70\n"
+    "   ret x1\n"
+    );
+#else
     asm(
     "    movq %rdi, %rsp\n"
     "    popq %r15\n"
@@ -140,6 +173,7 @@ void __attribute__((naked)) coroutine_restore_context(void *rsp)
     "    popq %rbp\n"
     "    popq %rdi\n"
     "    ret\n");
+#endif
 }
 
 // NOTE(proto): kind of a round robin, but sometimes it is not fair
@@ -210,7 +244,7 @@ void coroutine_finish(void)
         free(dead.items);
         free(polls.items);
         free(asleep.items);
-        memset(&contexts, 0, sizeof(contexts));
+        memset(&contexts,  0, sizeof(contexts));
         memset(&active,    0, sizeof(active));
         memset(&dead,      0, sizeof(dead));
         memset(&polls,     0, sizeof(polls));
@@ -241,6 +275,22 @@ void coroutine_go(void (*f)(void*), void *arg)
 
     void **rsp = (void**)((char*)contexts.items[id].stack_base + STACK_CAPACITY);
     // @arch
+#ifdef __aarch64__
+    *(--rsp) = arg; // x0
+    *(--rsp) = coroutine_finish; // none
+    *(--rsp) = f; //x30
+    *(--rsp) = 0; //x29
+    *(--rsp) = 0; //x28
+    *(--rsp) = 0; //x27
+    *(--rsp) = 0; //x26
+    *(--rsp) = 0; //x25
+    *(--rsp) = 0; //x24
+    *(--rsp) = 0; //x23
+    *(--rsp) = 0; //x22
+    *(--rsp) = 0; //x21
+    *(--rsp) = 0; //x20
+    *(--rsp) = 0; //x19
+#else
     *(--rsp) = coroutine_finish;
     *(--rsp) = f;
     *(--rsp) = arg; // push rdi
@@ -250,6 +300,7 @@ void coroutine_go(void (*f)(void*), void *arg)
     *(--rsp) = 0;   // push r13
     *(--rsp) = 0;   // push r14
     *(--rsp) = 0;   // push r15
+#endif
     contexts.items[id].rsp = rsp;
 
     da_append(&active, id);
@@ -272,6 +323,7 @@ void coroutine_wake_up(size_t id)
         if (asleep.items[i] == id) {
             da_remove_unordered(&asleep, id);
             da_remove_unordered(&polls, id);
+            // @random_robin
             da_append(&active, id);
             return;
         }
