@@ -58,7 +58,7 @@ void lex(void* input_void) {
 
 int main(int argc, char* argv[]){
     if (argc != 2) {
-        printf("Usage: %s <input-text>\n", argv[1]);
+        printf("Usage: %s <input-text>\n", argv[0]);
         return 1;
     }
 
