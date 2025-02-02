@@ -38,7 +38,7 @@ void lex(void* input_void) {
                 token_value.tk_int = *input - '0';
             } break;
 
-            // Operators        
+            // Operators
             case '+': case '-': {
                 token_kind = TK_OP;
                 token_value.tk_op = *input;
@@ -65,7 +65,7 @@ int main(int argc, char* argv[]){
     coroutine_init();
     {
         coroutine_go(lex, argv[1]);
-        
+
         // Consume those tokens
         bool quit = false;
         while(!quit && coroutine_alive() > 1){
