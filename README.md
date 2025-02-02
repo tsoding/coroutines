@@ -1,5 +1,8 @@
 # Coroutines
 
+> [!WARNING]
+> The library is not in production ready state yet
+
 Custom coroutines implementation in GNU C.
 
 ## What is a Coroutine?
