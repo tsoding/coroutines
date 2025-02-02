@@ -256,8 +256,6 @@ void coroutine_go(void (*f)(void*), void *arg)
     if (dead.count > 0) {
         id = dead.items[--dead.count];
     } else {
-        // TODO: Mark the page at the end of the stack buffer as non-readable, non-writable, non-executable to make stack overflows of coroutines more obvious in the debugger
-        //   This may require employing mmap(2) and mprotect(2) on Linux.
         da_append(&contexts, ((Context){0}));
         id = contexts.count-1;
         contexts.items[id].stack_base = mmap(NULL, STACK_CAPACITY, PROT_WRITE|PROT_READ, MAP_PRIVATE|MAP_STACK|MAP_ANONYMOUS|MAP_GROWSDOWN, -1, 0);
