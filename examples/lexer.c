@@ -39,7 +39,7 @@ void lex(void* input_void) {
             } break;
 
             // Operators
-            case '+': case '-': {
+            case '*': case '+': case '-': {
                 token_kind = TK_OP;
                 token_value.tk_op = *input;
             } break;
