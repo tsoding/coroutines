@@ -6,12 +6,13 @@
 
 #include <poll.h>
 #include <unistd.h>
+#include <sys/mman.h>
 
 #include "coroutine.h"
 
 // TODO: make the STACK_CAPACITY customizable by the user
 //#define STACK_CAPACITY (4*1024)
-#define STACK_CAPACITY (20*1024*1024)
+#define STACK_CAPACITY (1024*getpagesize())
 
 // Initial capacity of a dynamic array
 #ifndef DA_INIT_CAP
@@ -207,7 +208,7 @@ void coroutine_finish(void)
 {
     if (active.items[current] == 0) {
         for (size_t i = 1; i < contexts.count; ++i) {
-            free(contexts.items[i].stack_base);
+            munmap(contexts.items[i].stack_base, STACK_CAPACITY);
         }
         free(contexts.items);
         free(active.items);
@@ -257,7 +258,8 @@ void coroutine_go(void (*f)(void*), void *arg)
         //   This may require employing mmap(2) and mprotect(2) on Linux.
         da_append(&contexts, ((Context){0}));
         id = contexts.count-1;
-        contexts.items[id].stack_base = malloc(STACK_CAPACITY); // TODO: align the stack to 16 bytes or whatever
+        contexts.items[id].stack_base = mmap(NULL, STACK_CAPACITY, PROT_WRITE|PROT_READ, MAP_PRIVATE|MAP_STACK|MAP_ANONYMOUS|MAP_GROWSDOWN, -1, 0);
+        assert(contexts.items[id].stack_base != MAP_FAILED);
     }
 
     void **rsp = (void**)((char*)contexts.items[id].stack_base + STACK_CAPACITY);
