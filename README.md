@@ -37,6 +37,7 @@ Make sure you have all the corresponding compilers for the languages.
 ## Supported platforms
 
 - Linux x86_64
+- macOS x86_64
 
 *More are planned in the future*
 
