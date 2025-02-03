@@ -9,7 +9,6 @@ usz server_id = 0;
 
 fn void main() {
     coroutine::init();
-    defer coroutine::finish();
 
     server_id = coroutine::id();
 

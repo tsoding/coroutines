@@ -198,6 +198,7 @@ void coroutine_switch_context(void *rsp, Sleep_Mode sm, int fd)
     coroutine_restore_context(contexts.items[active.items[current]].rsp);
 }
 
+// TODO: think how to get rid of coroutine_init() call at all
 void coroutine_init(void)
 {
     if (contexts.count != 0) return;
@@ -205,24 +206,10 @@ void coroutine_init(void)
     da_append(&active, 0);
 }
 
-void coroutine_finish(void)
+void coroutine__finish_current(void)
 {
-    if (contexts.count == 0) return;
     if (active.items[current] == 0) {
-        for (size_t i = 1; i < contexts.count; ++i) {
-            munmap(contexts.items[i].stack_base, STACK_CAPACITY);
-        }
-        free(contexts.items);
-        free(active.items);
-        free(dead.items);
-        free(polls.items);
-        free(asleep.items);
-        memset(&contexts,  0, sizeof(contexts));
-        memset(&active,    0, sizeof(active));
-        memset(&dead,      0, sizeof(dead));
-        memset(&polls,     0, sizeof(polls));
-        memset(&asleep,    0, sizeof(asleep));
-        return;
+        UNREACHABLE("Main Coroutine with id == 0 should never reach this place");
     }
 
     da_append(&dead, active.items[current]);
@@ -264,7 +251,7 @@ void coroutine_go(void (*f)(void*), void *arg)
 
     void **rsp = (void**)((char*)contexts.items[id].stack_base + STACK_CAPACITY);
     // @arch
-    *(--rsp) = coroutine_finish;
+    *(--rsp) = coroutine__finish_current;
     *(--rsp) = f;
     *(--rsp) = arg; // push rdi
     *(--rsp) = 0;   // push rbx

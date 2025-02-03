@@ -37,11 +37,6 @@ extern "C" {
 // TODO: Allow calling it twice, 'cause why not?!
 void coroutine_init(void);
 
-// Finish the currently running coroutine. When called in the main coroutine
-// with id = 0 uninitializes the whole runtime of the library, deallocating all
-// the memory, and killing all the currently running coroutines.
-void coroutine_finish(void);
-
 // Switch to the next coroutine. The execution will continue starting from
 // coroutine_yield() (or any other flavor of it like coroutine_sleep_read() or
 // coroutine_sleep_write) call of another coroutine.

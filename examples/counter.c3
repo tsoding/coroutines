@@ -13,9 +13,8 @@ fn void counter(void* arg) {
 
 fn void main() {
     coroutine::init();
-    defer coroutine::finish();
     coroutine::go(fn void(void *arg) {
-        io::printfn("[%d], Hello from C3 Lambda", coroutine::id());
+        io::printfn("[%d] Hello from C3 Lambda", coroutine::id());
     });
     coroutine::go(&counter, (void*)5);
     coroutine::go(&counter, (void*)10);

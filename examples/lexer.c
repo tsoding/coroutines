@@ -63,23 +63,20 @@ int main(int argc, char* argv[]){
     }
 
     coroutine_init();
-    {
-        coroutine_go(lex, argv[1]);
+    coroutine_go(lex, argv[1]);
 
-        // Consume those tokens
-        bool quit = false;
-        while(!quit && coroutine_alive() > 1){
-            // Yield control to the lexer.
-            // It will lex and yield control back to here.
-            coroutine_yield();
-            switch(token_kind){
-                case TK_INT: { printf("TK_INT: %d\n", token_value.tk_int); } break;
-                case TK_OP:  { printf("TK_OP:  %c\n", token_value.tk_op); } break;
-                default:     { printf("Done!\n"); quit = true; } break;
-            }
+    // Consume those tokens
+    bool quit = false;
+    while(!quit && coroutine_alive() > 1){
+        // Yield control to the lexer.
+        // It will lex and yield control back to here.
+        coroutine_yield();
+        switch(token_kind){
+            case TK_INT: { printf("TK_INT: %d\n", token_value.tk_int); } break;
+            case TK_OP:  { printf("TK_OP:  %c\n", token_value.tk_op); } break;
+            default:     { printf("Done!\n"); quit = true; } break;
         }
     }
-    coroutine_finish();
 
     return 0;
 }

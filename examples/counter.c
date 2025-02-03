@@ -17,9 +17,8 @@ void counter(void *arg)
 int main()
 {
     coroutine_init();
-        coroutine_go(&counter, (void*)5);
-        coroutine_go(&counter, (void*)10);
-        while (coroutine_alive() > 1) coroutine_yield();
-    coroutine_finish();
+    coroutine_go(&counter, (void*)5);
+    coroutine_go(&counter, (void*)10);
+    while (coroutine_alive() > 1) coroutine_yield();
     return 0;
 }

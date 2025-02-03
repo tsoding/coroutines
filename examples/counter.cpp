@@ -20,6 +20,5 @@ int main()
     coroutine_go(counter, reinterpret_cast<void*>(5));
     coroutine_go(counter, reinterpret_cast<void*>(10));
     while (coroutine_alive() > 1) coroutine_yield();
-    coroutine_finish();
     return 0;
 }
