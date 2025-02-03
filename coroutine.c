@@ -165,7 +165,7 @@ void __attribute__((naked)) coroutine_sleep_write(int fd)
     "   stp x27, x28, [sp,#64]\n"
     "   stp x29, x30, [sp,#80]\n"
     "	mov x0, sp\n"
-    "	mov x1, #1\n"
+    "	mov x1, #2\n"
     "   b coroutine_switch_context\n");
 #else
     asm(
