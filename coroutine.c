@@ -103,7 +103,6 @@ void __attribute__((naked)) coroutine_yield(void)
 
 void __attribute__((naked)) coroutine_sleep_read(int fd)
 {
-    (void) fd;
     // @arch
     asm(
     "    pushq %rdi\n"
@@ -121,7 +120,6 @@ void __attribute__((naked)) coroutine_sleep_read(int fd)
 
 void __attribute__((naked)) coroutine_sleep_write(int fd)
 {
-    (void) fd;
     // @arch
     asm(
     "    pushq %rdi\n"
@@ -140,7 +138,6 @@ void __attribute__((naked)) coroutine_sleep_write(int fd)
 void __attribute__((naked)) coroutine_restore_context(void *rsp)
 {
     // @arch
-    (void)rsp;
     asm(
     "    movq %rdi, %rsp\n"
     "    popq %r15\n"
