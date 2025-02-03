@@ -82,12 +82,49 @@ typedef enum {
     SM_WRITE,
 } Sleep_Mode;
 
+static void* alloc_stack(void)
+{
+#ifdef __APPLE__ // macOS does not support MAP_STACK and MAP_GROWSDOWN
+    char* addr = (char*)mmap(NULL, STACK_CAPACITY, PROT_WRITE|PROT_READ, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+#else
+    char* addr = (char*)mmap(NULL, STACK_CAPACITY, PROT_WRITE|PROT_READ, MAP_PRIVATE|MAP_STACK|MAP_ANONYMOUS|MAP_GROWSDOWN, -1, 0);
+#endif
+    assert(addr != MAP_FAILED);
+    return addr;
+}
+
+static void free_stack(void* addr)
+{
+    munmap(addr, STACK_CAPACITY);
+}
+
+static void* setup_stack(void* stack, void (*f)(void*), void* arg)
+{
+    void **rsp = (void**)stack;
+    // @arch
+#if __x86_64__
+    *(--rsp) = coroutine_finish;
+    *(--rsp) = f;
+    *(--rsp) = arg; // push rdi
+    *(--rsp) = 0;   // push rbx
+    *(--rsp) = 0;   // push rbp
+    *(--rsp) = 0;   // push r12
+    *(--rsp) = 0;   // push r13
+    *(--rsp) = 0;   // push r14
+    *(--rsp) = 0;   // push r15
+#else
+#error unsupported cpu
+#endif
+    return rsp;
+}
+
 // Linux x86_64 call convention
 // %rdi, %rsi, %rdx, %rcx, %r8, and %r9
 
-void __attribute__((naked)) coroutine_yield(void)
+static void __attribute__((naked)) yield(Sleep_Mode sm, int fd)
 {
     // @arch
+#if __x86_64__ && __linux__
     asm(
     "    pushq %rdi\n"
     "    pushq %rbp\n"
@@ -96,51 +133,47 @@ void __attribute__((naked)) coroutine_yield(void)
     "    pushq %r13\n"
     "    pushq %r14\n"
     "    pushq %r15\n"
-    "    movq %rsp, %rdi\n"     // rsp
-    "    movq $0, %rsi\n"       // sm = SM_NONE
+    "    movq %rsp, %rdx\n" // rsp
+    // "    movq %rsi, %rsi\n" // fd
+    // "    movq %rdi, %rdi\n" // sm
     "    jmp coroutine_switch_context\n");
+#elif __x86_64__ && __APPLE__
+    asm(
+    "    pushq %rdi\n"
+    "    pushq %rbp\n"
+    "    pushq %rbx\n"
+    "    pushq %r12\n"
+    "    pushq %r13\n"
+    "    pushq %r14\n"
+    "    pushq %r15\n"
+    "    movq %rsp, %rdx\n" // rsp
+    // "    movq %rsi, %rsi\n" // fd
+    // "    movq %rdi, %rdi\n" // sm
+    "    jmp _coroutine_switch_context\n");
+#else
+#error unsupported cpu/os combo
+#endif
 }
 
-void __attribute__((naked)) coroutine_sleep_read(int fd)
+void coroutine_yield(void)
 {
-    (void) fd;
-    // @arch
-    asm(
-    "    pushq %rdi\n"
-    "    pushq %rbp\n"
-    "    pushq %rbx\n"
-    "    pushq %r12\n"
-    "    pushq %r13\n"
-    "    pushq %r14\n"
-    "    pushq %r15\n"
-    "    movq %rdi, %rdx\n"     // fd
-    "    movq %rsp, %rdi\n"     // rsp
-    "    movq $1, %rsi\n"       // sm = SM_READ
-    "    jmp coroutine_switch_context\n");
+    yield(SM_NONE, -1);
 }
 
-void __attribute__((naked)) coroutine_sleep_write(int fd)
+void coroutine_sleep_read(int fd)
 {
-    (void) fd;
-    // @arch
-    asm(
-    "    pushq %rdi\n"
-    "    pushq %rbp\n"
-    "    pushq %rbx\n"
-    "    pushq %r12\n"
-    "    pushq %r13\n"
-    "    pushq %r14\n"
-    "    pushq %r15\n"
-    "    movq %rdi, %rdx\n"     // fd
-    "    movq %rsp, %rdi\n"     // rsp
-    "    movq $2, %rsi\n"       // sm = SM_WRITE
-    "    jmp coroutine_switch_context\n");
+    yield(SM_READ, fd);
+}
+
+void coroutine_sleep_write(int fd)
+{
+    yield(SM_WRITE, fd);
 }
 
 void __attribute__((naked)) coroutine_restore_context(void *rsp)
 {
     // @arch
-    (void)rsp;
+#if __x86_64__ && __linux__
     asm(
     "    movq %rdi, %rsp\n"
     "    popq %r15\n"
@@ -151,9 +184,23 @@ void __attribute__((naked)) coroutine_restore_context(void *rsp)
     "    popq %rbp\n"
     "    popq %rdi\n"
     "    ret\n");
+#elif __x86_64__ && __APPLE__
+    asm(
+    "    movq %rdi, %rsp\n"
+    "    popq %r15\n"
+    "    popq %r14\n"
+    "    popq %r13\n"
+    "    popq %r12\n"
+    "    popq %rbx\n"
+    "    popq %rbp\n"
+    "    popq %rdi\n"
+    "    ret\n");
+#else
+#error unsupported cpu/os combo
+#endif
 }
 
-void coroutine_switch_context(void *rsp, Sleep_Mode sm, int fd)
+void coroutine_switch_context(Sleep_Mode sm, int fd, void* rsp)
 {
     contexts.items[active.items[current]].rsp = rsp;
 
@@ -210,7 +257,7 @@ void coroutine_finish(void)
     if (contexts.count == 0) return;
     if (active.items[current] == 0) {
         for (size_t i = 1; i < contexts.count; ++i) {
-            munmap(contexts.items[i].stack_base, STACK_CAPACITY);
+            free_stack(contexts.items[i].stack_base);
         }
         free(contexts.items);
         free(active.items);
@@ -258,22 +305,11 @@ void coroutine_go(void (*f)(void*), void *arg)
     } else {
         da_append(&contexts, ((Context){0}));
         id = contexts.count-1;
-        contexts.items[id].stack_base = mmap(NULL, STACK_CAPACITY, PROT_WRITE|PROT_READ, MAP_PRIVATE|MAP_STACK|MAP_ANONYMOUS|MAP_GROWSDOWN, -1, 0);
-        assert(contexts.items[id].stack_base != MAP_FAILED);
+        contexts.items[id].stack_base = alloc_stack();
     }
 
-    void **rsp = (void**)((char*)contexts.items[id].stack_base + STACK_CAPACITY);
-    // @arch
-    *(--rsp) = coroutine_finish;
-    *(--rsp) = f;
-    *(--rsp) = arg; // push rdi
-    *(--rsp) = 0;   // push rbx
-    *(--rsp) = 0;   // push rbp
-    *(--rsp) = 0;   // push r12
-    *(--rsp) = 0;   // push r13
-    *(--rsp) = 0;   // push r14
-    *(--rsp) = 0;   // push r15
-    contexts.items[id].rsp = rsp;
+    void *rsp = ((char*)contexts.items[id].stack_base + STACK_CAPACITY);
+    contexts.items[id].rsp = setup_stack(rsp, f, arg);
 
     da_append(&active, id);
 }
