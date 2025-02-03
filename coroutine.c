@@ -121,7 +121,7 @@ static void* setup_stack(void* stack, void (*f)(void*), void* arg)
 // Linux x86_64 call convention
 // %rdi, %rsi, %rdx, %rcx, %r8, and %r9
 
-void __attribute__((naked)) coroutine_yield(void)
+static void __attribute__((naked)) yield(Sleep_Mode sm, int fd)
 {
     // @arch
 #if __x86_64__ && __linux__
@@ -133,8 +133,9 @@ void __attribute__((naked)) coroutine_yield(void)
     "    pushq %r13\n"
     "    pushq %r14\n"
     "    pushq %r15\n"
-    "    movq %rsp, %rdi\n"     // rsp
-    "    movq $0, %rsi\n"       // sm = SM_NONE
+    "    movq %rsp, %rdx\n" // rsp
+    // "    movq %rsi, %rsi\n" // fd
+    // "    movq %rdi, %rdi\n" // sm
     "    jmp coroutine_switch_context\n");
 #elif __x86_64__ && __APPLE__
     asm(
@@ -145,80 +146,28 @@ void __attribute__((naked)) coroutine_yield(void)
     "    pushq %r13\n"
     "    pushq %r14\n"
     "    pushq %r15\n"
-    "    movq %rsp, %rdi\n"     // rsp
-    "    movq $0, %rsi\n"       // sm = SM_NONE
+    "    movq %rsp, %rdx\n" // rsp
+    // "    movq %rsi, %rsi\n" // fd
+    // "    movq %rdi, %rdi\n" // sm
     "    jmp _coroutine_switch_context\n");
 #else
-#error weird cpu/os combo
+#error unsupported cpu/os combo
 #endif
 }
 
-void __attribute__((naked)) coroutine_sleep_read(int fd)
+void coroutine_yield(void)
 {
-    // @arch
-#if __x86_64__ && __linux__
-    asm(
-    "    pushq %rdi\n"
-    "    pushq %rbp\n"
-    "    pushq %rbx\n"
-    "    pushq %r12\n"
-    "    pushq %r13\n"
-    "    pushq %r14\n"
-    "    pushq %r15\n"
-    "    movq %rdi, %rdx\n"     // fd
-    "    movq %rsp, %rdi\n"     // rsp
-    "    movq $1, %rsi\n"       // sm = SM_READ
-    "    jmp coroutine_switch_context\n");
-#elif __x86_64__ && __APPLE__
-    asm(
-    "    pushq %rdi\n"
-    "    pushq %rbp\n"
-    "    pushq %rbx\n"
-    "    pushq %r12\n"
-    "    pushq %r13\n"
-    "    pushq %r14\n"
-    "    pushq %r15\n"
-    "    movq %rdi, %rdx\n"     // fd
-    "    movq %rsp, %rdi\n"     // rsp
-    "    movq $1, %rsi\n"       // sm = SM_READ
-    "    jmp _coroutine_switch_context\n");
-#else
-#error weird cpu/os combo
-#endif
+    yield(SM_NONE, -1);
 }
 
-void __attribute__((naked)) coroutine_sleep_write(int fd)
+void coroutine_sleep_read(int fd)
 {
-    // @arch
-#if __x86_64__ && __linux__
-    asm(
-    "    pushq %rdi\n"
-    "    pushq %rbp\n"
-    "    pushq %rbx\n"
-    "    pushq %r12\n"
-    "    pushq %r13\n"
-    "    pushq %r14\n"
-    "    pushq %r15\n"
-    "    movq %rdi, %rdx\n"     // fd
-    "    movq %rsp, %rdi\n"     // rsp
-    "    movq $2, %rsi\n"       // sm = SM_WRITE
-    "    jmp coroutine_switch_context\n");
-#elif __x86_64__ && __APPLE__
-    asm(
-    "    pushq %rdi\n"
-    "    pushq %rbp\n"
-    "    pushq %rbx\n"
-    "    pushq %r12\n"
-    "    pushq %r13\n"
-    "    pushq %r14\n"
-    "    pushq %r15\n"
-    "    movq %rdi, %rdx\n"     // fd
-    "    movq %rsp, %rdi\n"     // rsp
-    "    movq $2, %rsi\n"       // sm = SM_WRITE
-    "    jmp _coroutine_switch_context\n");
-#else
-#error weird cpu/os combo
-#endif
+    yield(SM_READ, fd);
+}
+
+void coroutine_sleep_write(int fd)
+{
+    yield(SM_WRITE, fd);
 }
 
 void __attribute__((naked)) coroutine_restore_context(void *rsp)
@@ -251,7 +200,7 @@ void __attribute__((naked)) coroutine_restore_context(void *rsp)
 #endif
 }
 
-void coroutine_switch_context(void *rsp, Sleep_Mode sm, int fd)
+void coroutine_switch_context(Sleep_Mode sm, int fd, void* rsp)
 {
     contexts.items[active.items[current]].rsp = rsp;
 
