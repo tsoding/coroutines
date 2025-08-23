@@ -84,10 +84,32 @@ typedef enum {
 
 // Linux x86_64 call convention
 // %rdi, %rsi, %rdx, %rcx, %r8, and %r9
+// Linux aarch64 call convention
+// r0, r1, r2, r3, r4, r5, r6 and r7
 
 void __attribute__((naked)) coroutine_yield(void)
 {
     // @arch
+#ifdef __aarch64__ 
+
+    asm(
+    
+    "	sub sp,  sp,  #240\n"
+    "   stp q8, q9, [sp,#0]\n"
+    "   stp q10, q11, [sp,#32]\n"
+    "   stp q12, q13, [sp,#64]\n"
+    "   stp q14, q15, [sp,#96]\n"
+    "   stp x19, x20, [sp,#128]\n"
+    "   stp x21, x22, [sp,#144]\n"
+    "   stp x23, x24, [sp,#160]\n"
+    "   stp x25, x26, [sp,#176]\n"
+    "   stp x27, x28, [sp,#192]\n"
+    "   stp x29, x30, [sp,#208]\n"
+    "	mov x0, sp\n"
+    "	mov x1, #0\n"		// sm = SM_NONE
+    "   b coroutine_switch_context\n");
+
+#else
     asm(
     "    pushq %rdi\n"
     "    pushq %rbp\n"
@@ -99,12 +121,35 @@ void __attribute__((naked)) coroutine_yield(void)
     "    movq %rsp, %rdi\n"     // rsp
     "    movq $0, %rsi\n"       // sm = SM_NONE
     "    jmp coroutine_switch_context\n");
+#endif
 }
 
 void __attribute__((naked)) coroutine_sleep_read(int fd)
 {
+#ifndef __ANDROID__
     (void) fd;
+#endif
+
     // @arch
+   
+#ifdef __aarch64__ 
+    asm(
+    "	sub sp,  sp,  #240\n"
+    "   stp q8, q9, [sp,#0]\n"
+    "   stp q10, q11, [sp,#32]\n"
+    "   stp q12, q13, [sp,#64]\n"
+    "   stp q14, q15, [sp,#96]\n"
+    "   stp x19, x20, [sp,#128]\n"
+    "   stp x21, x22, [sp,#144]\n"
+    "   stp x23, x24, [sp,#160]\n"
+    "   stp x25, x26, [sp,#176]\n"
+    "   stp x27, x28, [sp,#192]\n"
+    "   stp x29, x30, [sp,#208]\n"
+    "   mov x2, x0\n"
+    "	mov x0, sp\n"
+    "	mov x1, #1\n" 		// sm = SM_READ
+    "   b coroutine_switch_context\n");
+#else
     asm(
     "    pushq %rdi\n"
     "    pushq %rbp\n"
@@ -117,12 +162,33 @@ void __attribute__((naked)) coroutine_sleep_read(int fd)
     "    movq %rsp, %rdi\n"     // rsp
     "    movq $1, %rsi\n"       // sm = SM_READ
     "    jmp coroutine_switch_context\n");
+#endif
 }
 
 void __attribute__((naked)) coroutine_sleep_write(int fd)
 {
+#ifndef __ANDROID__
     (void) fd;
+#endif
     // @arch
+#ifdef __aarch64__ 
+    asm(
+    "	sub sp,  sp,  #240\n"
+    "   stp q8, q9, [sp,#0]\n"
+    "   stp q10, q11, [sp,#32]\n"
+    "   stp q12, q13, [sp,#64]\n"
+    "   stp q14, q15, [sp,#96]\n"
+    "   stp x19, x20, [sp,#128]\n"
+    "   stp x21, x22, [sp,#144]\n"
+    "   stp x23, x24, [sp,#160]\n"
+    "   stp x25, x26, [sp,#176]\n"
+    "   stp x27, x28, [sp,#192]\n"
+    "   stp x29, x30, [sp,#208]\n"
+    "   mov x2, x0\n"
+    "	mov x0, sp\n"
+    "	mov x1, #2\n" 		// sm = SM_WRITE
+    "   b coroutine_switch_context\n");
+#else
     asm(
     "    pushq %rdi\n"
     "    pushq %rbp\n"
@@ -135,12 +201,33 @@ void __attribute__((naked)) coroutine_sleep_write(int fd)
     "    movq %rsp, %rdi\n"     // rsp
     "    movq $2, %rsi\n"       // sm = SM_WRITE
     "    jmp coroutine_switch_context\n");
+#endif
 }
 
 void __attribute__((naked)) coroutine_restore_context(void *rsp)
 {
     // @arch
     (void)rsp;
+#ifdef __aarch64__ 
+   
+    asm(
+    "   mov sp, x0\n"
+    "   ldp q8, q9, [sp,#0]\n"
+    "   ldp q10, q11, [sp,#32]\n"
+    "   ldp q12, q13, [sp,#64]\n"
+    "   ldp q14, q15, [sp,#96]\n"
+    "   ldp x19, x20, [sp,#128]\n"
+    "   ldp x21, x22, [sp,#144]\n"
+    "   ldp x23, x24, [sp,#160]\n"
+    "   ldp x25, x26, [sp,#176]\n"
+    "   ldp x27, x28, [sp,#192]\n"
+    "   ldp x29, x30, [sp,#208]\n"
+    "   mov x1, x30\n"
+    "   ldr x30, [sp, #224]\n"
+    "   ldr x0, [sp, #232]\n"
+    "   add sp, sp, #240\n"
+    "   ret x1\n");
+#else
     asm(
     "    movq %rdi, %rsp\n"
     "    popq %r15\n"
@@ -151,6 +238,7 @@ void __attribute__((naked)) coroutine_restore_context(void *rsp)
     "    popq %rbp\n"
     "    popq %rdi\n"
     "    ret\n");
+#endif
 }
 
 void coroutine_switch_context(void *rsp, Sleep_Mode sm, int fd)
@@ -251,6 +339,44 @@ void coroutine_go(void (*f)(void*), void *arg)
 
     void **rsp = (void**)((char*)contexts.items[id].stack_base + STACK_CAPACITY);
     // @arch
+#ifdef __aarch64__ 
+    *(--rsp) = arg;
+    *(--rsp) = coroutine__finish_current;
+    *(--rsp) = f;   // push r0
+
+
+
+    *(--rsp) = 0;   // push r29
+    *(--rsp) = 0;   // push r28
+    *(--rsp) = 0;   // push r27
+    *(--rsp) = 0;   // push r26
+    *(--rsp) = 0;   // push r25
+    *(--rsp) = 0;   // push r24
+    *(--rsp) = 0;   // push r23
+    *(--rsp) = 0;   // push r22
+    *(--rsp) = 0;   // push r21
+    *(--rsp) = 0;   // push r20
+    *(--rsp) = 0;   // push r19
+
+    *(--rsp) = 0;   // push v15
+    *(--rsp) = 0;   
+    *(--rsp) = 0;   // push v14
+    *(--rsp) = 0;   
+    *(--rsp) = 0;   // push v13
+    *(--rsp) = 0;   
+    *(--rsp) = 0;   // push v12
+    *(--rsp) = 0;   
+    *(--rsp) = 0;   // push v11
+    *(--rsp) = 0;   
+    *(--rsp) = 0;   // push v10
+    *(--rsp) = 0;   
+    *(--rsp) = 0;   // push v09
+    *(--rsp) = 0;   
+    *(--rsp) = 0;   // push v08
+    *(--rsp) = 0;   
+
+#else
+
     *(--rsp) = coroutine__finish_current;
     *(--rsp) = f;
     *(--rsp) = arg; // push rdi
@@ -260,6 +386,7 @@ void coroutine_go(void (*f)(void*), void *arg)
     *(--rsp) = 0;   // push r13
     *(--rsp) = 0;   // push r14
     *(--rsp) = 0;   // push r15
+#endif
     contexts.items[id].rsp = rsp;
 
     da_append(&active, id);
