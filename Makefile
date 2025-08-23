@@ -1,3 +1,5 @@
+FLAGS="-masm=intel"
+
 build/counter: examples/counter.c coroutine.h build/coroutine.a
 	gcc -I. -Wall -Wextra -ggdb -o build/counter examples/counter.c build/coroutine.a
 
@@ -21,11 +23,11 @@ build/lexer: examples/lexer.c coroutine.h build/coroutine.a
 
 build/coroutine.so: coroutine.c
 	mkdir -p build
-	gcc -Wall -Wextra -ggdb -shared -fPIC -o build/coroutine.so coroutine.c
+	gcc $(FLAGS) -Wall -Wextra -ggdb -shared -fPIC -o build/coroutine.so coroutine.c
 
 build/coroutine.a: build/coroutine.o
 	ar -rcs build/coroutine.a build/coroutine.o
 
 build/coroutine.o: coroutine.c coroutine.h
 	mkdir -p build
-	gcc -Wall -Wextra -ggdb -c -o build/coroutine.o coroutine.c
+	gcc $(FLAGS) -Wall -Wextra -ggdb -c -o build/coroutine.o coroutine.c

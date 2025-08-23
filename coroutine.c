@@ -89,15 +89,15 @@ void __attribute__((naked)) coroutine_yield(void)
 {
     // @arch
     asm(
-    "    pushq %rdi\n"
-    "    pushq %rbp\n"
-    "    pushq %rbx\n"
-    "    pushq %r12\n"
-    "    pushq %r13\n"
-    "    pushq %r14\n"
-    "    pushq %r15\n"
-    "    movq %rsp, %rdi\n"     // rsp
-    "    movq $0, %rsi\n"       // sm = SM_NONE
+    "    push rdi\n"
+    "    push rbp\n"
+    "    push rbx\n"
+    "    push r12\n"
+    "    push r13\n"
+    "    push r14\n"
+    "    push r15\n"
+    "    mov rdi, rsp\n"     // rsp
+    "    mov rsi, 0\n"       // sm = SM_NONE
     "    jmp coroutine_switch_context\n");
 }
 
@@ -106,16 +106,16 @@ void __attribute__((naked)) coroutine_sleep_read(int fd)
     (void) fd;
     // @arch
     asm(
-    "    pushq %rdi\n"
-    "    pushq %rbp\n"
-    "    pushq %rbx\n"
-    "    pushq %r12\n"
-    "    pushq %r13\n"
-    "    pushq %r14\n"
-    "    pushq %r15\n"
-    "    movq %rdi, %rdx\n"     // fd
-    "    movq %rsp, %rdi\n"     // rsp
-    "    movq $1, %rsi\n"       // sm = SM_READ
+    "    push rdi\n"
+    "    push rbp\n"
+    "    push rbx\n"
+    "    push r12\n"
+    "    push r13\n"
+    "    push r14\n"
+    "    push r15\n"
+    "    mov rdx, rdi\n"     // fd
+    "    mov rdi, rsp\n"     // rsp
+    "    mov rsi, 1\n"       // sm = SM_READ
     "    jmp coroutine_switch_context\n");
 }
 
@@ -124,16 +124,16 @@ void __attribute__((naked)) coroutine_sleep_write(int fd)
     (void) fd;
     // @arch
     asm(
-    "    pushq %rdi\n"
-    "    pushq %rbp\n"
-    "    pushq %rbx\n"
-    "    pushq %r12\n"
-    "    pushq %r13\n"
-    "    pushq %r14\n"
-    "    pushq %r15\n"
-    "    movq %rdi, %rdx\n"     // fd
-    "    movq %rsp, %rdi\n"     // rsp
-    "    movq $2, %rsi\n"       // sm = SM_WRITE
+    "    push rdi\n"
+    "    push rbp\n"
+    "    push rbx\n"
+    "    push r12\n"
+    "    push r13\n"
+    "    push r14\n"
+    "    push r15\n"
+    "    mov rdx, rdi\n"     // fd
+    "    mov rdi, rsp\n"     // rsp
+    "    mov rsi, 2\n"       // sm = SM_WRITE
     "    jmp coroutine_switch_context\n");
 }
 
@@ -142,14 +142,14 @@ void __attribute__((naked)) coroutine_restore_context(void *rsp)
     // @arch
     (void)rsp;
     asm(
-    "    movq %rdi, %rsp\n"
-    "    popq %r15\n"
-    "    popq %r14\n"
-    "    popq %r13\n"
-    "    popq %r12\n"
-    "    popq %rbx\n"
-    "    popq %rbp\n"
-    "    popq %rdi\n"
+    "    mov rsp, rdi\n"
+    "    pop r15\n"
+    "    pop r14\n"
+    "    pop r13\n"
+    "    pop r12\n"
+    "    pop rbx\n"
+    "    pop rbp\n"
+    "    pop rdi\n"
     "    ret\n");
 }
 
