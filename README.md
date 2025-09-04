@@ -3,7 +3,7 @@
 > [!WARNING]
 > The library is not in production ready state yet
 
-Custom coroutines implementation in GNU C.
+Custom coroutines implementation in C.
 
 ## What is a Coroutine?
 
@@ -26,6 +26,13 @@ $ make
 $ ./build/counter
 ```
 
+For Windows you need to use clang
+
+```console
+$ make cc=clang
+$ ./build/counter.exe
+```
+
 There are actually much more examples in the [./examples/](./examples/) in a variety of languages. To build all of them do:
 
 ```console
@@ -36,7 +43,8 @@ Make sure you have all the corresponding compilers for the languages.
 
 ## Supported platforms
 
-- Linux x86_64
+- Linux   x86_64
+- Windows x86_64 (tested for Msys clang)
 
 *More are planned in the future*
 
